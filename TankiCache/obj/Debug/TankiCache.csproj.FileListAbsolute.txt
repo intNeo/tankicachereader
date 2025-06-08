@@ -1,0 +1,11 @@
+D:\Visual Studio\TankiCache\TankiCache\bin\Debug\TankiCache.exe.config
+D:\Visual Studio\TankiCache\TankiCache\bin\Debug\TankiCache.exe
+D:\Visual Studio\TankiCache\TankiCache\bin\Debug\TankiCache.pdb
+D:\Visual Studio\TankiCache\TankiCache\obj\Debug\TankiCache.csproj.AssemblyReference.cache
+D:\Visual Studio\TankiCache\TankiCache\obj\Debug\TankiCache.Properties.Resources.resources
+D:\Visual Studio\TankiCache\TankiCache\obj\Debug\TankiCache.csproj.GenerateResource.cache
+D:\Visual Studio\TankiCache\TankiCache\obj\Debug\TankiCache.csproj.CoreCompileInputs.cache
+D:\Visual Studio\TankiCache\TankiCache\obj\Debug\TankiCache.exe
+D:\Visual Studio\TankiCache\TankiCache\obj\Debug\TankiCache.pdb
+D:\Visual Studio\TankiCache\TankiCache\obj\Debug\TankiCache.exe.config
+D:\Visual Studio\TankiCache\TankiCache\obj\Debug\ImageViewerWithBase64Names.MainForm.resources
