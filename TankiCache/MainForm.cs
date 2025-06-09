@@ -1,13 +1,13 @@
-﻿using System;
+﻿using NAudio.Wave;
+using SHDocVw; // Для ShellWindows
+using Shell32; // Для Shell
+using System;
+using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
-using System.Drawing;
-using NAudio.Wave;
-using System.Runtime.InteropServices;
-using Shell32;
-using SHDocVw;
 
 namespace ImageViewerWithBase64Names
 {
@@ -53,10 +53,22 @@ namespace ImageViewerWithBase64Names
                         Path = f,
                         DecodedName = TryDecodeFileName(Path.GetFileNameWithoutExtension(f)),
                         IsImage = IsLikelyImageFile(f),
-                        IsAudio = IsLikelyAudioFile(f),
-                        IsXml = IsLikelyXmlFile(f)
+                        IsXml = IsLikelyXmlFile(f),
+                        Is3ds = IsLikely3dsFile(f),
+                        IsTara = IsLikelyTaraFile(f),
+                        IsAudio = false // Будет определено позже
                     })
-                    .Where(f => f.IsImage || f.IsAudio || f.IsXml)
+                    .Select(f => new
+                    {
+                        f.Path,
+                        f.DecodedName,
+                        f.IsImage,
+                        f.IsXml,
+                        f.Is3ds,
+                        f.IsTara,
+                        IsAudio = !f.IsImage && !f.IsXml && !f.Is3ds && !f.IsTara && IsLikelyAudioFile(f.Path)
+                    })
+                    .Where(f => f.IsImage || f.IsXml || f.Is3ds || f.IsTara || f.IsAudio)
                     .OrderBy(f => f.DecodedName)
                     .ToArray();
 
@@ -67,7 +79,7 @@ namespace ImageViewerWithBase64Names
 
                 if (files.Length == 0)
                 {
-                    MessageBox.Show("Не найдено подходящих файлов (изображения, аудио, XML) в выбранной директории.", "Информация",
+                    MessageBox.Show("Не найдено подходящих файлов в выбранной директории.", "Информация",
                         MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
@@ -117,7 +129,47 @@ namespace ImageViewerWithBase64Names
             }
         }
 
-        private bool IsLikelyAudioFile(string filePath)
+        private bool IsLikelyXmlFile(string filePath)
+        {
+            try
+            {
+                byte[] buffer = new byte[128];
+                int bytesRead;
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                {
+                    bytesRead = fs.Read(buffer, 0, buffer.Length);
+                }
+
+                if (bytesRead < 2) return false;
+                string content = Encoding.UTF8.GetString(buffer, 0, bytesRead).TrimStart();
+                return content.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase) ||
+                       content.StartsWith("<") && content.Contains(">");
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool IsLikely3dsFile(string filePath)
+        {
+            try
+            {
+                byte[] header = new byte[2];
+                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                {
+                    fs.Read(header, 0, header.Length);
+                }
+
+                return header.SequenceEqual(new byte[] { 0x4D, 0x4D }); // 3DS files start with "MM"
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool IsLikelyTaraFile(string filePath)
         {
             try
             {
@@ -127,11 +179,12 @@ namespace ImageViewerWithBase64Names
                     fs.Read(header, 0, header.Length);
                 }
 
-                if (header.Take(3).SequenceEqual(new byte[] { 0x49, 0x44, 0x33 }) ||
-                    header.Take(2).SequenceEqual(new byte[] { 0xFF, 0xFB })) return true; // MP3
-                if (header.Take(4).SequenceEqual(new byte[] { 0x52, 0x49, 0x46, 0x46 }) &&
-                    header.Skip(8).Take(4).SequenceEqual(new byte[] { 0x57, 0x41, 0x56, 0x45 })) return true; // WAV
-                if (header.Take(4).SequenceEqual(new byte[] { 0x4F, 0x67, 0x67, 0x53 })) return true; // OGG
+                // Проверяем сигнатуру TARA (на основе лога)
+                if (header.Take(6).SequenceEqual(new byte[] { 0x00, 0x00, 0x00 }) &&
+                    header.Skip(6).Take(6).SequenceEqual(new byte[] { 0x6C, 0x69, 0x62, 0x72, 0x61, 0x72 })) // "librar"
+                    return true;
+                if (header.Take(8).SequenceEqual(new byte[] { 0x00, 0x00, 0x00, 0x02, 0x00, 0x01, 0x69, 0x00 }))
+                    return true;
 
                 return false;
             }
@@ -141,28 +194,56 @@ namespace ImageViewerWithBase64Names
             }
         }
 
-        private bool IsLikelyXmlFile(string filePath)
+        private bool IsLikelyAudioFile(string filePath)
         {
             try
             {
-                byte[] buffer = new byte[128]; // Read first 128 bytes to check for XML-like content
-                int bytesRead;
+                byte[] header = new byte[16];
                 using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
                 {
-                    bytesRead = fs.Read(buffer, 0, buffer.Length);
+                    fs.Read(header, 0, header.Length);
                 }
 
-                if (bytesRead < 2) return false; // Need at least "<" for XML-like content
-                string content = Encoding.UTF8.GetString(buffer, 0, bytesRead).TrimStart();
-                // Check for XML declaration or any XML-like tag (e.g., <images>)
-                return content.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase) ||
-                       content.StartsWith("<") && content.Contains(">");
+                // Проверка стандартных аудиоформатов по HEX-заголовкам
+                if (header.Take(3).SequenceEqual(new byte[] { 0x49, 0x44, 0x33 }) ||
+                    header.Take(2).SequenceEqual(new byte[] { 0xFF, 0xFB })) return true; // MP3
+                if (header.Take(4).SequenceEqual(new byte[] { 0x52, 0x49, 0x46, 0x46 }) &&
+                    header.Skip(8).Take(4).SequenceEqual(new byte[] { 0x57, 0x41, 0x56, 0x45 })) return true; // WAV
+                if (header.Take(4).SequenceEqual(new byte[] { 0x4F, 0x67, 0x67, 0x53 })) return true; // OGG
+                if (header.Take(4).SequenceEqual(new byte[] { 0x66, 0x4C, 0x61, 0x43 })) return true; // FLAC
+                if (header.Take(4).SequenceEqual(new byte[] { 0x41, 0x44, 0x49, 0x46 }) ||
+                    header.Take(2).SequenceEqual(new byte[] { 0xFF, 0xF1 }) ||
+                    header.Take(2).SequenceEqual(new byte[] { 0xFF, 0xF9 })) return true; // AAC
+                if (header.Take(16).SequenceEqual(new byte[] { 0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11,
+                                                              0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE, 0x6C })) return true; // WMA
+
+                //// Проверка через NAudio для файлов с расширениями .mp3, .wav, .ogg, .flac, .aac, .wma, .bin, .bas
+                try
+                {
+                    using (var reader = new AudioFileReader(filePath))
+                    {
+                        // Если загрузка прошла без ошибок, считаем файл аудио
+                        return true;
+                    }
+                }
+                catch
+                {
+                    // Логируем HEX-заголовок для отладки
+                    string hexHeader = BitConverter.ToString(header).Replace("-", " ");
+                    System.Diagnostics.Debug.WriteLine($"Неизвестный аудиофайл: {filePath}, HEX: {hexHeader}");
+                    return false;
+                }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка при проверке XML файла {filePath}: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Ошибка при проверке аудиофайла {filePath}: {ex.Message}");
                 return false;
             }
+        }
+
+        private void FileListBox_Click(object sender, EventArgs e)
+        {
+            throw new NotImplementedException();
         }
 
         private void FileListBox_SelectedIndexChanged(object sender, EventArgs e)
@@ -170,14 +251,14 @@ namespace ImageViewerWithBase64Names
             if (fileListBox.SelectedItem == null) return;
 
             string filePath = ((dynamic)fileListBox.SelectedItem).Path;
-            string fileName = Path.GetFileName(filePath);
-            string decodedName = ((dynamic)fileListBox.SelectedItem).DecodedName;
-
+            string fileName = Path.GetFileName(filePath); // Объявляем fileName здесь
             try
             {
-                fileNameLabel.Text = $"{fileName}\n(Декодировано: {decodedName})";
+                string decodedName = TryDecodeFileName(Path.GetFileNameWithoutExtension(filePath));
 
-                if (IsLikelyImageFile(filePath))
+                fileNameLabel.Text = $"Оригинал: {fileName}\nДекодировано: {decodedName}";
+
+                if (((dynamic)fileListBox.SelectedItem).IsImage)
                 {
                     imagePreview.Visible = true;
                     xmlContentTextBox.Visible = false;
@@ -188,7 +269,7 @@ namespace ImageViewerWithBase64Names
                         imagePreview.Image = Image.FromStream(fs);
                     }
                 }
-                else if (IsLikelyXmlFile(filePath))
+                else if (((dynamic)fileListBox.SelectedItem).IsXml)
                 {
                     imagePreview.Visible = false;
                     xmlContentTextBox.Visible = true;
@@ -206,23 +287,31 @@ namespace ImageViewerWithBase64Names
                         xmlContentTextBox.Text = $"Ошибка при чтении XML: {ex.Message}";
                     }
                 }
-                else if (IsLikelyAudioFile(filePath))
+                else if (((dynamic)fileListBox.SelectedItem).IsAudio)
                 {
                     imagePreview.Visible = false;
                     xmlContentTextBox.Visible = false;
                     playStopButton.Enabled = true;
                     volumeTrackBar.Enabled = true;
                 }
+                else
+                {
+                    imagePreview.Visible = false;
+                    xmlContentTextBox.Visible = true;
+                    xmlContentTextBox.Text = "Предпросмотр для этого типа файла недоступен.";
+                    playStopButton.Enabled = false;
+                    volumeTrackBar.Enabled = false;
+                }
 
                 StopAudio();
             }
             catch (Exception ex)
             {
-                fileNameLabel.Text = fileName;
+                fileNameLabel.Text = $"Ошибка: {fileName}"; // Теперь fileName доступна
                 imagePreview.Image = null;
                 xmlContentTextBox.Text = "";
-                MessageBox.Show($"Ошибка при загрузке файла: {ex.Message}",
-                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Ошибка при загрузке файла: {ex.Message}", "Ошибка",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -237,35 +326,29 @@ namespace ImageViewerWithBase64Names
                 string directory = Path.GetDirectoryName(filePath);
                 if (string.IsNullOrEmpty(directory)) return;
 
-                // Используем Shell API для проверки открытых окон проводника
                 Shell shell = (Shell)Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application"));
                 ShellWindows windows = shell.Windows();
                 bool found = false;
 
                 foreach (InternetExplorer window in windows)
                 {
-                    // Проверяем, является ли окно проводником
                     if (window.FullName.ToLower().EndsWith("explorer.exe"))
                     {
                         ShellFolderView view = (ShellFolderView)window.Document;
-                        // Получаем путь папки через Items().Item().Path
                         string folderPath = view.Folder.Items().Item().Path;
                         if (string.Equals(folderPath, directory, StringComparison.OrdinalIgnoreCase))
                         {
-                            // Найдено окно с нужной папкой, сбрасываем выделение, выделяем и фокусируем новый файл
-                            view.SelectItem(view.Folder.ParseName(Path.GetFileName(filePath)), 1 | 4 | 8); // SVSI_SELECT | SVSI_DESELECTOTHERS | SVSI_ENSUREVISIBLE
-                            window.Visible = true; // Делаем окно видимым
+                            view.SelectItem(view.Folder.ParseName(Path.GetFileName(filePath)), 1 | 4 | 8);
+                            window.Visible = true;
                             found = true;
                             break;
                         }
                     }
                 }
 
-                // Освобождаем COM-объекты
-                if (windows != null) Marshal.ReleaseComObject(windows);
-                if (shell != null) Marshal.ReleaseComObject(shell);
+                Marshal.ReleaseComObject(windows);
+                Marshal.ReleaseComObject(shell);
 
-                // Если окно не найдено, открываем новое
                 if (!found)
                 {
                     System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{filePath}\"");
@@ -273,17 +356,17 @@ namespace ImageViewerWithBase64Names
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Не удалось открыть проводник: {ex.Message}",
-                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Не удалось открыть проводник: {ex.Message}", "Ошибка",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
-        private void CovertFileButton_Click(object sender, EventArgs e)
+        private void CopyFileButton_Click(object sender, EventArgs e)
         {
             if (fileListBox.SelectedItem == null)
             {
                 MessageBox.Show("Выберите файл для копирования", "Ошибка",
-                                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -296,7 +379,7 @@ namespace ImageViewerWithBase64Names
             {
                 saveDialog.Filter = $"{extension.ToUpper()} Files (*{extension})|*{extension}|All files (*.*)|*.*";
                 saveDialog.FileName = originalFileName + extension;
-                saveDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop); // Default to Desktop
+                saveDialog.InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
 
                 if (saveDialog.ShowDialog() == DialogResult.OK)
                 {
@@ -304,12 +387,12 @@ namespace ImageViewerWithBase64Names
                     {
                         File.Copy(sourcePath, saveDialog.FileName, overwrite: true);
                         MessageBox.Show("Файл успешно скопирован!", "Успех",
-                                      MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Ошибка при копировании файла: {ex.Message}",
-                                       "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show($"Ошибка при копировании файла: {ex.Message}", "Ошибка",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
                     }
                 }
             }
@@ -319,7 +402,7 @@ namespace ImageViewerWithBase64Names
         {
             try
             {
-                byte[] header = new byte[12];
+                byte[] header = new byte[16];
                 using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
                 {
                     fs.Read(header, 0, header.Length);
@@ -337,7 +420,15 @@ namespace ImageViewerWithBase64Names
                 if (header.Take(4).SequenceEqual(new byte[] { 0x52, 0x49, 0x46, 0x46 }) &&
                     header.Skip(8).Take(4).SequenceEqual(new byte[] { 0x57, 0x41, 0x56, 0x45 })) return ".wav";
                 if (header.Take(4).SequenceEqual(new byte[] { 0x4F, 0x67, 0x67, 0x53 })) return ".ogg";
+                if (header.Take(4).SequenceEqual(new byte[] { 0x66, 0x4C, 0x61, 0x43 })) return ".flac";
+                if (header.Take(4).SequenceEqual(new byte[] { 0x41, 0x44, 0x49, 0x46 }) ||
+                    header.Take(2).SequenceEqual(new byte[] { 0xFF, 0xF1 }) ||
+                    header.Take(2).SequenceEqual(new byte[] { 0xFF, 0xF9 })) return ".aac";
+                if (header.Take(16).SequenceEqual(new byte[] { 0x30, 0x26, 0xB2, 0x75, 0x8E, 0x66, 0xCF, 0x11,
+                                                              0xA6, 0xD9, 0x00, 0xAA, 0x00, 0x62, 0xCE, 0x6C })) return ".wma";
                 if (IsLikelyXmlFile(filePath)) return ".xml";
+                if (IsLikely3dsFile(filePath)) return ".3ds";
+                if (IsLikelyTaraFile(filePath)) return ".tara";
             }
             catch
             {
@@ -352,20 +443,19 @@ namespace ImageViewerWithBase64Names
 
             string filePath = ((dynamic)fileListBox.SelectedItem).Path;
 
-            if (!IsLikelyAudioFile(filePath)) return;
+            if (!((dynamic)fileListBox.SelectedItem).IsAudio) return;
 
             try
             {
                 if (!isPlaying)
                 {
-                    // Stop any existing playback before starting new
                     StopAudio();
 
                     waveOut = new WaveOutEvent();
                     audioFileReader = new AudioFileReader(filePath);
                     audioFileReader.Volume = lastVolume;
                     waveOut.Init(audioFileReader);
-                    waveOut.PlaybackStopped += WaveOut_PlaybackStopped; // Handle playback completion
+                    waveOut.PlaybackStopped += WaveOut_PlaybackStopped;
                     waveOut.Play();
                     playStopButton.Text = "Стоп";
                     isPlaying = true;
@@ -379,13 +469,12 @@ namespace ImageViewerWithBase64Names
             {
                 MessageBox.Show($"Ошибка воспроизведения: {ex.Message}", "Ошибка",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
-                StopAudio(); // Ensure cleanup on error
+                StopAudio();
             }
         }
 
         private void WaveOut_PlaybackStopped(object sender, StoppedEventArgs e)
         {
-            // Reset state when playback naturally completes
             StopAudio();
         }
 

@@ -94,7 +94,7 @@
             this.button1.TabIndex = 3;
             this.button1.Text = "Сохранить файл";
             this.button1.UseVisualStyleBackColor = true;
-            this.button1.Click += new System.EventHandler(this.CovertFileButton_Click);
+            this.button1.Click += new System.EventHandler(this.CopyFileButton_Click);
             // 
             // playStopButton
             // 
