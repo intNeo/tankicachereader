@@ -8,6 +8,12 @@
         private System.Windows.Forms.ListBox fileListBox;
         private System.Windows.Forms.PictureBox imagePreview;
         private System.Windows.Forms.Button openInExplorerButton;
+        private System.Windows.Forms.Label fileNameLabel;
+        private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.Button playStopButton;
+        private System.Windows.Forms.TrackBar volumeTrackBar;
+        private System.Windows.Forms.Label volumeLabel;
+        private System.Windows.Forms.TextBox xmlContentTextBox;
 
         protected override void Dispose(bool disposing)
         {
@@ -27,7 +33,12 @@
             this.openInExplorerButton = new System.Windows.Forms.Button();
             this.fileNameLabel = new System.Windows.Forms.Label();
             this.button1 = new System.Windows.Forms.Button();
+            this.playStopButton = new System.Windows.Forms.Button();
+            this.volumeTrackBar = new System.Windows.Forms.TrackBar();
+            this.volumeLabel = new System.Windows.Forms.Label();
+            this.xmlContentTextBox = new System.Windows.Forms.TextBox();
             ((System.ComponentModel.ISupportInitialize)(this.imagePreview)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.volumeTrackBar)).BeginInit();
             this.SuspendLayout();
             // 
             // selectFolderButton
@@ -41,6 +52,7 @@
             // 
             // fileListBox
             // 
+            this.fileListBox.HorizontalScrollbar = true;
             this.fileListBox.Location = new System.Drawing.Point(12, 48);
             this.fileListBox.Name = "fileListBox";
             this.fileListBox.Size = new System.Drawing.Size(275, 485);
@@ -82,11 +94,55 @@
             this.button1.TabIndex = 3;
             this.button1.Text = "Сохранить файл";
             this.button1.UseVisualStyleBackColor = true;
-            this.button1.Click += new System.EventHandler(this.CopyFileButton_Click);
+            this.button1.Click += new System.EventHandler(this.CovertFileButton_Click);
+            // 
+            // playStopButton
+            // 
+            this.playStopButton.Location = new System.Drawing.Point(480, 12);
+            this.playStopButton.Name = "playStopButton";
+            this.playStopButton.Size = new System.Drawing.Size(150, 30);
+            this.playStopButton.TabIndex = 4;
+            this.playStopButton.Text = "Воспроизвести";
+            this.playStopButton.UseVisualStyleBackColor = true;
+            this.playStopButton.Click += new System.EventHandler(this.PlayStopButton_Click);
+            // 
+            // volumeTrackBar
+            // 
+            this.volumeTrackBar.Location = new System.Drawing.Point(698, 12);
+            this.volumeTrackBar.Maximum = 100;
+            this.volumeTrackBar.Name = "volumeTrackBar";
+            this.volumeTrackBar.Size = new System.Drawing.Size(100, 45);
+            this.volumeTrackBar.TabIndex = 5;
+            this.volumeTrackBar.Value = 50;
+            this.volumeTrackBar.Scroll += new System.EventHandler(this.VolumeTrackBar_Scroll);
+            // 
+            // volumeLabel
+            // 
+            this.volumeLabel.Location = new System.Drawing.Point(636, 12);
+            this.volumeLabel.Name = "volumeLabel";
+            this.volumeLabel.Size = new System.Drawing.Size(67, 30);
+            this.volumeLabel.TabIndex = 6;
+            this.volumeLabel.Text = "Громкость:";
+            this.volumeLabel.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            // 
+            // xmlContentTextBox
+            // 
+            this.xmlContentTextBox.Location = new System.Drawing.Point(293, 138);
+            this.xmlContentTextBox.Multiline = true;
+            this.xmlContentTextBox.Name = "xmlContentTextBox";
+            this.xmlContentTextBox.ReadOnly = true;
+            this.xmlContentTextBox.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
+            this.xmlContentTextBox.Size = new System.Drawing.Size(505, 395);
+            this.xmlContentTextBox.TabIndex = 7;
+            this.xmlContentTextBox.Visible = false;
             // 
             // MainForm
             // 
             this.ClientSize = new System.Drawing.Size(807, 540);
+            this.Controls.Add(this.xmlContentTextBox);
+            this.Controls.Add(this.volumeLabel);
+            this.Controls.Add(this.volumeTrackBar);
+            this.Controls.Add(this.playStopButton);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.fileListBox);
             this.Controls.Add(this.openInExplorerButton);
@@ -100,11 +156,10 @@
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Tanki Cache Reader";
             ((System.ComponentModel.ISupportInitialize)(this.imagePreview)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.volumeTrackBar)).EndInit();
             this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
-
-        private System.Windows.Forms.Label fileNameLabel;
-        private System.Windows.Forms.Button button1;
     }
 }
